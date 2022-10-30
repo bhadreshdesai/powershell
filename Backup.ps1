@@ -62,32 +62,38 @@ function Get-SubFolder {
 }
 
 function HandleFolder {
-    param ($folder)
+    param ($folder, $relativePath)
     # Get relative path from source folder
-    Write-Verbose $folder.Path
+    # Write-Verbose $folder.Path
+    $path = Join-Path $relativePath $folder.Name
+    Write-Verbose $path
 }
 
 function HandleFile {
-    param ($file)
-    Write-Verbose $file.Path
+    param ($file, $relativePath)
+    #Write-Verbose $file.Path
+    $fileName = Split-Path $file.Path -Leaf
+    $path = Join-Path $relativePath $fileName
+    Write-Verbose $path
 }
 
 function Get-Dir {
-    param($parent)
-    foreach ($item in $parent.GetFolder.items() | Sort-Object Name) {
+    param($folder, $parentPath)
+    foreach ($item in $folder.GetFolder.items() | Sort-Object Name) {
         if ($item.IsFolder) {
-            HandleFolder -folder $item
-            Get-Dir $item
+            $relativePath = Join-Path $parentPath $item.Name
+            HandleFolder -folder $item -relativePath $parentPath
+            Get-Dir -folder $item -parentPath $relativePath
         }
         else {
-            HandleFile -file $item
+            HandleFile -file $item -relativePath $parentPath
         }
     }
 }
 function Main {
     $folderUnderMyComputer = Get-FolderUnderMyComputer -folderName $folderNameUnderMyComputer
     $sourceFolder = Get-SubFolder -parent $folderUnderMyComputer -path $sourceFolderPath
-    Get-Dir -parent $sourceFolder
+    Get-Dir -folder $sourceFolder -parentPath "."
     #Write-Verbose $sourceFolder.Path
 }
 
