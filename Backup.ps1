@@ -1,4 +1,16 @@
-[CmdletBinding()] param ()
+[CmdletBinding()]
+param (
+    [Parameter(Position = 0, mandatory = $true)]    
+    [string] $folderNameUnderMyComputer,
+    [Parameter(Position = 1, mandatory = $true)]
+    [string] $sourceFolderPath,
+    [Parameter(Position = 2, mandatory = $true)]
+    [string] $backupFolderPath
+)
+
+<#
+Backup.ps1 -folderNameUnderMyComputer "OS (C:)" -sourceFolderPath "BDD\pstest\DCIM" -backupFolderPath "C:\BDD\pstest\Backup"
+#>
 
 function Get-ShellProxy {
     if ( -not $global:ShellProxy) {
@@ -51,6 +63,7 @@ function Get-SubFolder {
 
 function HandleFolder {
     param ($folder)
+    # Get relative path from source folder
     Write-Verbose $folder.Path
 }
 
@@ -72,8 +85,6 @@ function Get-Dir {
     }
 }
 function Main {
-    $folderNameUnderMyComputer = "OS (C:)"
-    $sourceFolderPath = "BDD\pstest\DCIM"
     $folderUnderMyComputer = Get-FolderUnderMyComputer -folderName $folderNameUnderMyComputer
     $sourceFolder = Get-SubFolder -parent $folderUnderMyComputer -path $sourceFolderPath
     Get-Dir -parent $sourceFolder
