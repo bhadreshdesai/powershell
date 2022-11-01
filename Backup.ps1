@@ -65,16 +65,28 @@ function HandleFolder {
     param ($folder, $relativePath)
     # Get relative path from source folder
     # Write-Verbose $folder.Path
-    $path = Join-Path $relativePath $folder.Name
-    Write-Verbose $path
+    if ($global:mode -eq "SIZE") {
+        $global:totalFolderCnt ++
+    }
+    else {
+        $path = Join-Path $relativePath $folder.Name
+        Write-Verbose $path
+    }
+    
 }
 
 function HandleFile {
     param ($file, $relativePath)
     #Write-Verbose $file.Path
-    $fileName = Split-Path $file.Path -Leaf
-    $path = Join-Path $relativePath $fileName
-    Write-Verbose $path
+    if ($global:mode -eq "SIZE") {
+        $global:totalFileCnt ++
+        $global:totalSize += $file.Size
+    }
+    else {
+        $fileName = Split-Path $file.Path -Leaf
+        $path = Join-Path $relativePath $fileName
+        Write-Verbose $path
+    }
 }
 
 function Get-Dir {
@@ -93,7 +105,14 @@ function Get-Dir {
 function Main {
     $folderUnderMyComputer = Get-FolderUnderMyComputer -folderName $folderNameUnderMyComputer
     $sourceFolder = Get-SubFolder -parent $folderUnderMyComputer -path $sourceFolderPath
+    $global:mode = "SIZE"
+    $global:totalFileCnt = 0
+    $global:totalSize = 0
     Get-Dir -folder $sourceFolder -parentPath "."
+    Write-Verbose "Total Cnt: $global:totalFileCnt, Total Size: $global:totalSize"
+    $global:mode = "COPY"
+    Get-Dir -folder $sourceFolder -parentPath "."
+    Write-Verbose "Total Cnt: $global:totalFileCnt, Total Size: $global:totalSize"
     #Write-Verbose $sourceFolder.Path
 }
 
