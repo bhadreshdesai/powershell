@@ -12,6 +12,10 @@ param (
 Backup.ps1 -folderNameUnderMyComputer "OS (C:)" -sourceFolderPath "BDD\pstest\DCIM" -backupFolderPath "C:\BDD\pstest\Backup"
 #>
 
+<#
+Get Shell.Application com object
+Reuse it by storing it on $global
+#>
 function Get-ShellProxy {
     if ( -not $global:ShellProxy) {
         $global:ShellProxy = new-object -com Shell.Application
@@ -25,7 +29,7 @@ Get a folder from a given namespace
 function Get-FolderFromNamespace {
     param($namespace, $folderName)
     $shell = Get-ShellProxy
-    # 17 (0x11) = ssfDRIVES from the ShellSpecialFolderConstants (https://msdn.microsoft.com/en-us/library/windows/desktop/bb774096(v=vs.85).aspx)
+    # 17 (0x11) = ssfDRIVES from the ShellSpecialFolderConstants (https://learn.microsoft.com/en-gb/windows/win32/api/shldisp/ne-shldisp-shellspecialfolderconstants?redirectedfrom=MSDN)
     # => "My Computer" â€” the virtual folder that contains everything on the local computer: storage devices, printers, and Control Panel.
     # This folder can also contain mapped network drives.
     # $shellItem = $shell.NameSpace(17).self
@@ -43,7 +47,8 @@ function Get-FolderUnderMyComputer {
     param (
         $folderName
     )
-    return Get-FolderFromNamespace -namespace 17 -folderName $folderName
+    $ssfDRIVES = 0x11
+    return Get-FolderFromNamespace -namespace $ssfDRIVES -folderName $folderName
 }
 
 <#
@@ -61,6 +66,18 @@ function Get-SubFolder {
     return $current
 }
 
+function GetOrCreateFolder {
+    param($folderPath)
+
+    # If destination path doesn't exist, create it only if we have some items to move
+    if (-not (test-path -PathType Container $folderPath) ) {
+        $folder = new-item -itemtype directory -path $folderPath
+    }
+    $shell = Get-ShellProxy
+    $folder = $shell.Namespace($folderPath).self
+    
+    return $folder
+}
 function HandleFolder {
     param ($folder, $relativePath)
     # Get relative path from source folder
@@ -68,11 +85,21 @@ function HandleFolder {
     if ($global:mode -eq "SIZE") {
         $global:totalFolderCnt ++
     }
+    <#
     else {
-        $path = Join-Path $relativePath $folder.Name
-        Write-Verbose $path
+        if ($relativePath) {
+            $destinationFolderPath = Join-Path $backupFolderPath $relativePath $folder.Name
+        }
+        else {
+            $destinationFolderPath = Join-Path $backupFolderPath $folder.Name
+        }
+        
+        if (-not (test-path $destinationFolderPath) ) {
+            Write-Verbose "Create folder $destinationFolderPath"
+            new-item -itemtype directory -path $destinationFolderPath
+        }
     }
-    
+    #>
 }
 
 function HandleFile {
@@ -84,35 +111,63 @@ function HandleFile {
     }
     else {
         $fileName = Split-Path $file.Path -Leaf
-        $path = Join-Path $relativePath $fileName
-        Write-Verbose $path
+        $destinationFolderPath = Join-Path $backupFolderPath $relativePath
+        # Check the target file doesn't exist:
+        $targetFilePath = join-path -path $destinationFolderPath -childPath $fileName
+        if (test-path -path $targetFilePath) {
+            # write-error "Destination file exists - file not moved:`n`t$targetFilePath"
+        }
+        else {
+            $destinationFolder = GetOrCreateFolder -folderPath $destinationFolderPath
+            $destinationFolder.GetFolder.CopyHere($file)
+            if (test-path -path $targetFilePath) {
+                # Optionally do something with the file, such as modify the name (e.g. removed phone-added prefix, etc.)
+            }
+            else {
+                write-error "Failed to move file to destination:`n`t$targetFilePath"
+            }
+        }
+
     }
 }
 
-function Get-Dir {
+function ProcessDir {
     param($folder, $parentPath)
     foreach ($item in $folder.GetFolder.items() | Sort-Object Name) {
         if ($item.IsFolder) {
-            $relativePath = Join-Path $parentPath $item.Name
+            if ($parentPath) {
+                $relativePath = Join-Path $parentPath $item.Name
+            }
+            else {
+                $relativePath = $item.Name
+            }
             HandleFolder -folder $item -relativePath $parentPath
-            Get-Dir -folder $item -parentPath $relativePath
+            ProcessDir -folder $item -parentPath $relativePath
         }
         else {
             HandleFile -file $item -relativePath $parentPath
         }
     }
 }
+
+function CalculateSize {
+    param($folder)
+    $global:mode = "SIZE"
+    $global:totalFolderCnt = 0
+    $global:totalFileCnt = 0
+    $global:totalSize = 0
+    ProcessDir -folder $folder
+}
 function Main {
     $folderUnderMyComputer = Get-FolderUnderMyComputer -folderName $folderNameUnderMyComputer
     $sourceFolder = Get-SubFolder -parent $folderUnderMyComputer -path $sourceFolderPath
-    $global:mode = "SIZE"
-    $global:totalFileCnt = 0
-    $global:totalSize = 0
-    Get-Dir -folder $sourceFolder -parentPath "."
-    Write-Verbose "Total Cnt: $global:totalFileCnt, Total Size: $global:totalSize"
+    
+    CalculateSize -folder $sourceFolder
+
+    Write-Verbose "FolderCnt: $global:totalFolderCnt, FileCnt: $global:totalFileCnt, Total Size: $global:totalSize"
     $global:mode = "COPY"
-    Get-Dir -folder $sourceFolder -parentPath "."
-    Write-Verbose "Total Cnt: $global:totalFileCnt, Total Size: $global:totalSize"
+    ProcessDir -folder $sourceFolder
+    #Write-Verbose "FolderCnt: $global:totalFolderCnt, FileCnt: $global:totalFileCnt, Total Size: $global:totalSize"
     #Write-Verbose $sourceFolder.Path
 }
 

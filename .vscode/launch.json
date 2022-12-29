@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Run Backup",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Backup.ps1",
+            "cwd": "${cwd}",
+            "args": ["-verbose", "-folderNameUnderMyComputer", "\"OS (C:)\"", "-sourceFolderPath", "\"BDD\\pstest\\DCIM\"", "-backupFolderPath", "\"C:\\BDD\\pstest\\Backup\""]
+        },
+        {
             "name": "PowerShell: Launch Current File",
             "type": "PowerShell",
             "request": "launch",
