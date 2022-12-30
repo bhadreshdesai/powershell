@@ -85,21 +85,20 @@ function HandleFolder {
     if ($global:mode -eq "SIZE") {
         $global:totalFolderCnt ++
     }
-    <#
     else {
-        if ($relativePath) {
-            $destinationFolderPath = Join-Path $backupFolderPath $relativePath $folder.Name
+        ++$global:folderCnt
+        $percent = [int](($global:folderCnt * 100) / $global:totalFolderCnt)
+        # Write-Verbose "Folder percentage: $percent" 
+        $folderPath = $folder.Path
+        $FolderProgressParameters = @{
+            ID              = 1
+            Activity        = 'Processing Folder'
+            Status          = "Folder: ${folderPath} [${global:folderCnt} / ${global:totalFolderCnt} (${percent}%)]"
+            PercentComplete = $percent
+            #CurrentOperation = $folder.Path
         }
-        else {
-            $destinationFolderPath = Join-Path $backupFolderPath $folder.Name
-        }
-        
-        if (-not (test-path $destinationFolderPath) ) {
-            Write-Verbose "Create folder $destinationFolderPath"
-            new-item -itemtype directory -path $destinationFolderPath
-        }
+        Write-Progress @FolderProgressParameters
     }
-    #>
 }
 
 function HandleFile {
@@ -114,6 +113,22 @@ function HandleFile {
         $destinationFolderPath = Join-Path $backupFolderPath $relativePath
         # Check the target file doesn't exist:
         $targetFilePath = join-path -path $destinationFolderPath -childPath $fileName
+
+        ++$global:fileCnt
+        $global:size += $file.Size
+        $percentFile = [int](($global:fileCnt * 100) / $global:totalFileCnt)
+        # $percentSize = [int](($global:size * 100) / $global:totalSize)
+
+        $filePath = $file.Path
+        $FileProgressParameters = @{
+            ID              = 2
+            Activity        = 'Processing File'
+            Status          = "File: ${filePath} [${global:fileCnt} / ${global:totalFileCnt} (${percentFile}%)]"
+            PercentComplete = $percentFile
+            #CurrentOperation = $folder.Path
+        }
+        Write-Progress @FileProgressParameters
+
         if (test-path -path $targetFilePath) {
             # write-error "Destination file exists - file not moved:`n`t$targetFilePath"
         }
@@ -153,20 +168,33 @@ function ProcessDir {
 function CalculateSize {
     param($folder)
     $global:mode = "SIZE"
+    ProcessDir -folder $folder
+}
+
+function CopyFiles {
+    param($folder)
+    $global:mode = "COPY"
+    ProcessDir -folder $folder
+}
+
+function Init {
     $global:totalFolderCnt = 0
     $global:totalFileCnt = 0
     $global:totalSize = 0
-    ProcessDir -folder $folder
+    $global:folderCnt = 0
+    $global:fileCnt = 0
+    $global:size = 0
+    $PSStyle.Progress.View = 'Classic'
 }
 function Main {
+    Init
     $folderUnderMyComputer = Get-FolderUnderMyComputer -folderName $folderNameUnderMyComputer
     $sourceFolder = Get-SubFolder -parent $folderUnderMyComputer -path $sourceFolderPath
     
     CalculateSize -folder $sourceFolder
 
     Write-Verbose "FolderCnt: $global:totalFolderCnt, FileCnt: $global:totalFileCnt, Total Size: $global:totalSize"
-    $global:mode = "COPY"
-    ProcessDir -folder $sourceFolder
+    CopyFiles -folder $sourceFolder
     #Write-Verbose "FolderCnt: $global:totalFolderCnt, FileCnt: $global:totalFileCnt, Total Size: $global:totalSize"
     #Write-Verbose $sourceFolder.Path
 }
